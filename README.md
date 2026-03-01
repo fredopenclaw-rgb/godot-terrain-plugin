@@ -95,6 +95,7 @@ const UNLOAD_RADIUS = 600.0
 ## Development Status
 
 - [x] Blender addon export logic
+- [x] Fixed EnumProperty typo in registration
 - [x] Godot importer scene manipulation
 - [x] Chunk edge connection system
 - [ ] Material system with terrain textures

@@ -44,7 +44,7 @@ class TerrainExportProperties(bpy.types.PropertyGroup):
     
     export_format: bpy.props.EnumProperty(
         name="export_format",
-        items=[('MESH', 'OBJ')],
+        items=['MESH', 'OBJ'],
         default='MESH',
         description="Export format"
     )
