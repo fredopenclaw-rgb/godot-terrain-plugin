@@ -2,7 +2,10 @@
 
 A Blender to Godot terrain pipeline for importing massive terrain meshes into your Godot games.
 
-## Version History
+### v1.0.2 - Proper Blender Add-on Package (2026-03-01)
+- Fixed ZIP package - now contains only blender_addon/ directory for clean installation
+- Removed v1.0.1 release (was incorrectly structured)
+- Proper installation without drag-and-drop requirements
 
 ### v1.0.1 - Current Release (2026-03-01)
 - Fixed Blender addon installation by creating proper ZIP package
@@ -13,10 +16,6 @@ A Blender to Godot terrain pipeline for importing massive terrain meshes into yo
 ### v1.0.0 - Initial Release (2026-03-01)
 - Initial release with folder-based installation
 - Required dragging and dropping files into Blender
-
-### v1.0.2 - Broken (Deleted 2026-03-01)
-- Attempted to create duplicate release tag
-- Deleted (was duplicate of v1.0.1)
 
 ---
 
