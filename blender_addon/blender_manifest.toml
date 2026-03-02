@@ -1,0 +1,17 @@
+schema_version = "1.0.0"
+id = "terrain_exporter"
+version = "1.0.0"
+name = "Terrain Exporter"
+description = "Export terrain meshes in manageable chunks."
+tagline = "Export terrain meshes to game engines"
+license = [
+  "SPDX-License-Identifier: MIT"
+]
+maintainer = "Silas Bazar"
+type = "add-on"
+blender_version_min = "5.0.0"
+website = "https://github.com/silas/godot-terrain-plugin"
+tags = ["Import-Export", "Game Engine", "Terrain"]
+
+[permissions]
+files = "Required to export terrain chunks and metadata to the filesystem."
