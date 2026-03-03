@@ -1,118 +1,202 @@
 @tool
 extends RefCounted
 
-# Configuration
-const TERRAIN_MATERIAL = preload("res://materials/terrain.tres")
-const CREATE_COLLISION = true
-const CREATE_NAVMESH = true
-const ASSEMBLE_MASTER = true
-const MASTER_NODE_NAME = "MasterTerrain"
-
-# Import settings
-var chunk_path = "res://exported_terrain/"
-
-# Called by plugin menu item
-func import_terrain_from_blender():
-	print("Importing terrain from Blender export...")
-	var root_node = EditorInterface.get_edited_scene_root()
-	if not root_node:
-		push_error("No open scene to import into. Please open a scene first.")
-		return
+# Called by import_dock.gd when user clicks "Create World From Tiles"
+func import_external_assets(world_name: String, directory_path: String):
+	print("Step 1: Importing external chunks from " + directory_path)
 	
-	# Create master terrain node if it doesn't exist
-	var master_terrain_node = root_node.get_node_or_null(MASTER_NODE_NAME)
-	if not master_terrain_node:
-		master_terrain_node = Node3D.new()
-		master_terrain_node.name = MASTER_NODE_NAME
-		
-		# Add to editor scene
-		root_node.add_child(master_terrain_node)
-		master_terrain_node.owner = root_node
-		
-		# Create material
-		var mat = StandardMaterial3D.new()
-		mat.albedo_color = Color(0.6, 0.7, 0.8)  # Earthy terrain color
-		# Assign default material to all instances instead of geometry overrides, unless configured globally
-		
-	# Load metadata
-	var metadata_path = chunk_path + "terrain_metadata.json"
-	if not FileAccess.file_exists(metadata_path):
-		push_error("Error: Could not find " + metadata_path)
-		return
-		
-	var file = FileAccess.open(metadata_path, FileAccess.READ)
-	var json_string = file.get_as_text()
-	var json = JSON.parse_string(json_string)
+	var world_dir = "res://terrain_worlds/" + world_name + "/"
+	var raw_dir = world_dir + "raw_assets/"
 	
-	if json:
-		# Load chunks based on metadata
-		_load_terrain_chunks(json.chunks, json.bbox, master_terrain_node, root_node)
-		print("Terrain import complete!")
-	else:
-		push_error("Error parsing JSON terrain metadata")
+	var dir = DirAccess.open("res://")
+	if not dir.dir_exists(world_dir):
+		dir.make_dir_recursive(world_dir)
+	if not dir.dir_exists(raw_dir):
+		dir.make_dir_recursive(raw_dir)
+		
+	var da = DirAccess.open(directory_path)
+	if da:
+		da.list_dir_begin()
+		var file_name = da.get_next()
+		while file_name != "":
+			if not da.current_is_dir() and not file_name.begins_with("."):
+				var ext = file_name.get_extension().to_lower()
+				if ext in ["obj", "mesh", "json", "mtl"]:
+					var src = directory_path + "/" + file_name
+					var dst = raw_dir + file_name
+					if not FileAccess.file_exists(dst):
+						DirAccess.copy_absolute(src, dst)
+			file_name = da.get_next()
+			
+	print("Meshes staged! Triggering Godot EditorFileSystem scan...")
+	EditorInterface.get_resource_filesystem().scan()
 
-# Load terrain chunks based on Blender export metadata
-func _load_terrain_chunks(chunks_data: Array, bbox_data: Dictionary, master_node: Node3D, root_node: Node):
-	# Load all chunk meshes
+# Called by import_dock.gd when user clicks "Step 2: Create World From Tiles"
+func generate_world(world_name: String, directory_path: String, metadata: Dictionary):
+	print("Step 2: Generating world '" + world_name + "' from chunks in " + directory_path)
+	
+	var world_dir = "res://terrain_worlds/" + world_name + "/"
+	var chunks_dir = world_dir + "chunks/"
+	
+	var dir = DirAccess.open("res://")
+	if not dir.dir_exists(chunks_dir):
+		dir.make_dir_recursive(chunks_dir)
+		
+	var chunks_data = metadata.get("chunks", [])
+	var chunk_size = metadata.get("chunk_size", 64.0)
+	
+	print("Prefabricating terrain chunks...")
+	
+	# Process each chunk into a saved .tscn prefab. We read from directory_path directly (which is raw_assets now)
 	for chunk in chunks_data:
-		var chunk_filename = chunk.filename + ".obj"  # Assuming wavefront fallback or .mesh
-		var chunk_object = load(chunk_path + chunk_filename)
+		_process_chunk(chunk, directory_path, chunks_dir)
 		
-		if chunk_object:
-			var chunk_instance = MeshInstance3D.new()
-			if chunk_object is Mesh:
-				chunk_instance.mesh = chunk_object
-			elif chunk_object is PackedScene:
-				# OBJ imports as PackedScene in Godot 4 by default
-				var instantiated = chunk_object.instantiate()
-				for child in instantiated.get_children():
-					if child is MeshInstance3D:
-						chunk_instance.mesh = child.mesh
-						break
-				instantiated.queue_free()
+	# Create the Master World Scene
+	_create_master_world_scene(world_name, world_dir, chunks_dir, chunk_size, metadata)
+	
+	print("World Generation Complete! Open " + world_dir + world_name + ".tscn")
 
-			chunk_instance.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_ON
-			chunk_instance.name = chunk.filename
-			
-			# Add to master terrain node
-			master_node.add_child(chunk_instance)
-			chunk_instance.owner = root_node
-			
-			# Assign material if missing
-			if TERRAIN_MATERIAL:
-				chunk_instance.material_override = TERRAIN_MATERIAL
-			
-			# Create collision if enabled
-			if CREATE_COLLISION and chunk_instance.mesh:
-				chunk_instance.create_trimesh_collision()
-				# The new physics body becomes a child of `chunk_instance`.
-				var static_body = chunk_instance.get_child(0)
-				if static_body:
-					static_body.name = "Collision_" + str(chunk.chunk)
-					static_body.owner = root_node
-					
-					# Assign node ownership recursive to collision subnodes
-					for shape in static_body.get_children():
-						shape.owner = root_node
+func _process_chunk(chunk_data: Dictionary, source_dir: String, target_dir: String):
+	var chunk_filename = chunk_data.get("filename", "")
+	if chunk_filename.is_empty():
+		return
 		
-	# Optionally create navigation mesh based on bounding box
-	if CREATE_NAVMESH:
-		_create_navigation_mesh(bbox_data, master_node, root_node)
+	var obj_path = source_dir + "/" + chunk_filename + ".obj"
+	var tscn_path = target_dir + chunk_filename + ".tscn"
+	
+	if not FileAccess.file_exists(obj_path):
+		obj_path = source_dir + "/" + chunk_filename + ".mesh"
+		if not FileAccess.file_exists(obj_path):
+			push_error("Source mesh not found for chunk: " + chunk_filename)
+			return
+			
+	# Load the actual raw mesh object (PackedScene if OBJ, Mesh if .mesh)
+	var raw_mesh_data = load(obj_path)
+	if not raw_mesh_data:
+		push_error("Failed to load generic Godot mesh/scene for: " + obj_path)
+		return
+		
+	var root_node = null
+	
+	# CONTINUOUS UPDATE LOGIC: Check if the chunk already exists
+	if FileAccess.file_exists(tscn_path):
+		var existing_scene = load(tscn_path)
+		if existing_scene and existing_scene is PackedScene:
+			root_node = existing_scene.instantiate()
+			# Purge the old mesh and collision logic
+			var old_mesh = root_node.get_node_or_null("Mesh")
+			if old_mesh:
+				old_mesh.free() # Safely delete the old terrain math synchronously
+	
+	# If chunk didn't exist or failed to load, create a new root
+	if not root_node:
+		root_node = Node3D.new()
+		root_node.name = chunk_filename
+	
+	var mesh_instance = MeshInstance3D.new()
+	mesh_instance.name = "Mesh"
+	
+	var extracted_mesh: Mesh = null
+	
+	# Extract mesh data depending on format
+	if raw_mesh_data is Mesh:
+		extracted_mesh = raw_mesh_data
+	elif raw_mesh_data is PackedScene:
+		var state = raw_mesh_data.instantiate()
+		if state is MeshInstance3D and state.mesh:
+			extracted_mesh = state.mesh.duplicate(true) # Deep copy to decouple from OBJ
+		elif state.get_class() == "ImporterMeshInstance3D" and state.mesh:
+			extracted_mesh = state.mesh.duplicate(true)
+		else:
+			for child in state.get_children():
+				if (child is MeshInstance3D or child.get_class() == "ImporterMeshInstance3D") and child.mesh:
+					extracted_mesh = child.mesh.duplicate(true)
+					break
+		state.free()
+		
+	if not extracted_mesh:
+		push_error("Could not find Mesh data inside imported file: " + obj_path)
+		if root_node.get_parent() == null:
+			root_node.free()
+		mesh_instance.free()
+		return
+		
+	mesh_instance.mesh = extracted_mesh
+		
+	root_node.add_child(mesh_instance)
+	mesh_instance.owner = root_node
+	mesh_instance.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_ON
+	
+	# Try material
+	if ResourceLoader.exists("res://materials/terrain.tres"):
+		var mat = load("res://materials/terrain.tres")
+		if mat:
+			mesh_instance.material_override = mat
+			
+	# Create Trimesh Collision
+	mesh_instance.create_trimesh_collision()
+	var static_body = mesh_instance.get_child(0)
+	if static_body:
+		static_body.name = "Collision"
+		static_body.owner = root_node
+		for shape in static_body.get_children():
+			shape.owner = root_node
+			
+	# Explicitly re-own any PRE-EXISTING custom user children (like trees/houses) 
+	# so they aren't lost when we repack the scene!
+	for child in root_node.get_children():
+		if not child.owner:
+			child.owner = root_node
+		_recursive_own(child, root_node)
+			
+	# Save the scene
+	var packed_scene = PackedScene.new()
+	var result = packed_scene.pack(root_node)
+	if result == OK:
+		ResourceSaver.save(packed_scene, tscn_path)
+	else:
+		push_error("Failed to pack scene for chunk " + chunk_filename)
+		
+	# Clean up memory
+	if root_node.get_parent() == null:
+		root_node.free()
 
-# Create navigation mesh for AI pathfinding
-func _create_navigation_mesh(bbox_data: Dictionary, master_node: Node3D, root_node: Node):
-	var min_v = Vector3(bbox_data.min[0], bbox_data.min[1], bbox_data.min[2])
-	var max_v = Vector3(bbox_data.max[0], bbox_data.max[1], bbox_data.max[2])
+func _recursive_own(node: Node, new_owner: Node):
+	for child in node.get_children():
+		if not child.owner:
+			child.owner = new_owner
+		_recursive_own(child, new_owner)
+
+func _create_master_world_scene(world_name: String, world_dir: String, chunks_dir: String, chunk_size: float, metadata: Dictionary):
+	var scene_path = world_dir + world_name + ".tscn"
 	
-	var nav_node = NavigationRegion3D.new()
-	nav_node.name = MASTER_NODE_NAME + "_NavRegion"
+	# CONTINUOUS UPDATE LOGIC: Never overwrite the Master Scene if the user already built one
+	if FileAccess.file_exists(scene_path):
+		print("Master scene already exists. Skipping overwrite to preserve Player setup.")
+		EditorInterface.open_scene_from_path(scene_path)
+		return
+		
+	var root_node = Node3D.new()
+	root_node.name = world_name
 	
-	var nav_mesh = NavigationMesh.new()
-	nav_node.navmesh = nav_mesh
+	# Create Terrain Manager
+	var manager = preload("res://addons/godot_importer/terrain_manager.gd").new()
+	manager.name = "TerrainManager"
+	root_node.add_child(manager)
+	manager.owner = root_node
 	
-	master_node.add_child(nav_node)
-	nav_node.owner = root_node
+	manager.chunk_path = chunks_dir
+	manager.chunk_size = chunk_size
+	manager.total_chunks = metadata.get("total_chunks", 0)
 	
-	# Setting baking properties AABB from bounding box is mostly deprecated/handled internally 
-	# User should click "Bake Navmesh" button on the NavigationRegion3D node to properly bake geometry from children.
-	print("NavigationRegion3D created. Please select it in the tree and BAKE NAVMESH.")
+	# Provide the JSON data string so the manager knows the coordinates of every file
+	manager.chunk_metadata_json = JSON.stringify(metadata)
+	
+	# Save main scene
+	scene_path = world_dir + world_name + ".tscn"
+	var packed_scene = PackedScene.new()
+	packed_scene.pack(root_node)
+	ResourceSaver.save(packed_scene, scene_path)
+	
+	# Open it in the editor
+	EditorInterface.open_scene_from_path(scene_path)

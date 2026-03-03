@@ -1,0 +1,141 @@
+[gd_scene load_steps=2 format=3 uid="uid://cx4vj5b8qnw2l"]
+
+[ext_resource type="Script" path="res://addons/godot_importer/import_dock.gd" id="1_a2b3c"]
+
+[node name="TerrainImporter" type="MarginContainer"]
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+grow_horizontal = 2
+grow_vertical = 2
+theme_override_constants/margin_left = 8
+theme_override_constants/margin_top = 8
+theme_override_constants/margin_right = 8
+theme_override_constants/margin_bottom = 8
+script = ExtResource("1_a2b3c")
+
+[node name="VBoxContainer" type="VBoxContainer" parent="."]
+layout_mode = 2
+theme_override_constants/separation = 12
+
+[node name="HeaderLabel" type="Label" parent="VBoxContainer"]
+layout_mode = 2
+theme_override_font_sizes/font_size = 16
+text = "Terrain Importer"
+horizontal_alignment = 1
+
+[node name="HSeparator" type="HSeparator" parent="VBoxContainer"]
+layout_mode = 2
+
+[node name="WorldNameSection" type="VBoxContainer" parent="VBoxContainer"]
+layout_mode = 2
+
+[node name="Label" type="Label" parent="VBoxContainer/WorldNameSection"]
+layout_mode = 2
+text = "1. Target World:"
+
+[node name="WorldSelectHBox" type="HBoxContainer" parent="VBoxContainer/WorldNameSection"]
+layout_mode = 2
+
+[node name="WorldDropdown" type="OptionButton" parent="VBoxContainer/WorldNameSection/WorldSelectHBox"]
+unique_name_in_owner = true
+layout_mode = 2
+size_flags_horizontal = 3
+
+[node name="RefreshWorldsButton" type="Button" parent="VBoxContainer/WorldNameSection/WorldSelectHBox"]
+unique_name_in_owner = true
+layout_mode = 2
+text = "Refresh"
+
+[node name="NewWorldButton" type="Button" parent="VBoxContainer/WorldNameSection/WorldSelectHBox"]
+unique_name_in_owner = true
+layout_mode = 2
+text = "New..."
+
+[node name="NewWorldHBox" type="HBoxContainer" parent="VBoxContainer/WorldNameSection"]
+unique_name_in_owner = true
+visible = false
+layout_mode = 2
+
+[node name="WorldNameEdit" type="LineEdit" parent="VBoxContainer/WorldNameSection/NewWorldHBox"]
+unique_name_in_owner = true
+layout_mode = 2
+size_flags_horizontal = 3
+placeholder_text = "Enter new world..."
+
+[node name="ConfirmNewWorldButton" type="Button" parent="VBoxContainer/WorldNameSection/NewWorldHBox"]
+unique_name_in_owner = true
+layout_mode = 2
+text = "Create"
+
+[node name="CancelNewWorldButton" type="Button" parent="VBoxContainer/WorldNameSection/NewWorldHBox"]
+unique_name_in_owner = true
+layout_mode = 2
+text = "Cancel"
+
+[node name="HSeparatorWorld" type="HSeparator" parent="VBoxContainer"]
+layout_mode = 2
+
+[node name="ActionsLabel" type="Label" parent="VBoxContainer"]
+layout_mode = 2
+text = "2. World Actions:"
+
+[node name="FolderSection" type="VBoxContainer" parent="VBoxContainer"]
+layout_mode = 2
+
+[node name="Label" type="Label" parent="VBoxContainer/FolderSection"]
+layout_mode = 2
+text = "External Export Directory (Optional):"
+
+[node name="HBoxContainer" type="HBoxContainer" parent="VBoxContainer/FolderSection"]
+layout_mode = 2
+
+[node name="PathLineEdit" type="LineEdit" parent="VBoxContainer/FolderSection/HBoxContainer"]
+unique_name_in_owner = true
+layout_mode = 2
+size_flags_horizontal = 3
+editable = false
+placeholder_text = "Select folder..."
+
+[node name="BrowseButton" type="Button" parent="VBoxContainer/FolderSection/HBoxContainer"]
+unique_name_in_owner = true
+layout_mode = 2
+text = "Browse"
+
+[node name="ImportExternalButton" type="Button" parent="VBoxContainer"]
+unique_name_in_owner = true
+layout_mode = 2
+disabled = true
+text = "Import External Chunks"
+
+[node name="CreateWorldButton" type="Button" parent="VBoxContainer"]
+unique_name_in_owner = true
+layout_mode = 2
+disabled = true
+text = "Create World From Tiles"
+
+[node name="HSeparatorActions" type="HSeparator" parent="VBoxContainer"]
+layout_mode = 2
+
+[node name="MetadataSection" type="VBoxContainer" parent="VBoxContainer"]
+layout_mode = 2
+
+[node name="Label" type="Label" parent="VBoxContainer/MetadataSection"]
+layout_mode = 2
+text = "3. World Metadata:"
+
+[node name="MetadataLabel" type="RichTextLabel" parent="VBoxContainer/MetadataSection"]
+unique_name_in_owner = true
+layout_mode = 2
+bbcode_enabled = true
+text = "[color=gray]No world selected[/color]"
+fit_content = true
+
+
+[node name="FileDialog" type="FileDialog" parent="."]
+unique_name_in_owner = true
+title = "Open a Directory"
+size = Vector2i(600, 400)
+ok_button_text = "Select Current Folder"
+file_mode = 2
+access = 2

@@ -1,34 +1,31 @@
-# Godot Terrain Plugin
+# Godot AAA Terrain Importer
 
-This folder contains the Terrain Importer logic for the latest Godot engine versions (4.x+). 
+This folder contains the Terrain Importer plugin for Godot 4.x. It works in tandem with the Blender Terrain Exporter add-on to bring perfectly chunked, massive terrain into Godot as a fully streamlined, distance-based memory loading system.
 
-## Proper Plugin Architecture & Orchestration
+## Features
+- **Custom Editor Dock**: A dedicated UI panel inside Godot to select your exported terrain folder and parse metadata.
+- **Automated Prefabrication**: Automatically wraps raw `.obj` chunk meshes into Godot `.tscn` scenes complete with generated Trimesh Static Collisions.
+- **AAA Tile Streaming (`TerrainManager`)**: A dynamic 2D grid partition manager that asynchronously loads chunks into memory when the player gets near, and actively `queue_free()`s them when they walk away to maintain rock-solid performance on huge open worlds.
 
-In Godot Engine, editor extensions should be structured as **EditorPlugins**. Currently, the workflow was structured using `EditorScript`, which requires a user to manually open the Script editor and click `File > Run`. EditorPlugins are a far more robust, proper orchestration method.
+## Installation Guide (Step-by-Step)
 
-### Structure of a Godot Plugin
-A proper plugin lives in a directory inside `res://addons/` (e.g., `res://addons/godot_terrain_plugin/`). It requires two main components:
+Godot requires plugins to live in a very specific directory structure inside your project. Here is how to install this importer:
 
-1. **`plugin.cfg`**: The configuration manifest. This tells Godot that the folder contains a plugin, what its name is, and which script to run upon activation.
-   ```ini
-   [plugin]
-   name="Terrain Importer"
-   description="Imports chunked terrain from Blender."
-   author="Your Name"
-   version="1.0"
-   script="plugin.gd"
-   ```
+1. **Create the Addons Folder**: Open your Godot project. In the **FileSystem dock** (bottom left), if you don't already have an `addons` folder, right-click `res://` and select **Create New > Folder**. Name it exactly `addons`.
+2. **Copy the Plugin**: Open your computer's file explorer. Navigate to this repository and copy the entire `godot_importer` folder.
+3. **Paste into Godot**: Paste the `godot_importer` folder inside your Godot project's `addons` folder.
+   - *Crucial Check*: The final path inside Godot MUST be exactly `res://addons/godot_importer/`. (It must contain `plugin.cfg` and `plugin.gd` directly inside it).
+4. **Enable the Plugin**: In the Godot top menu, go to **Project > Project Settings**.
+5. Click on the **Plugins** tab at the top of the window.
+6. You will see **Terrain Importer** in the list. Check the **Enable** box next to it.
+7. The **Terrain Importer** UI dock will instantly appear on the right side of your editor!
 
-2. **`plugin.gd` (EditorPlugin)**: The initializer script that extends `EditorPlugin`. This script orchestrates adding UI buttons to the editor (e.g., adding a menu item in `Project > Tools`), registering custom node types, or managing dock panels.
+## How to Use
 
-### Separation of Concerns (Editor vs. Runtime)
-A plugin should always separate editor tooling logic from runtime logic:
-- **Editor Tooling (`import_plugin.gd` / `EditorPlugin`)**: Handles reading the `terrain_metadata.json`, generating the `MeshInstance3D` nodes, baking `NavigationRegion3D`, and creating static collision bodies inside the editor viewport.
-- **Runtime Logic (`terrain_manager.gd`)**: A node attached to the scene that runs during the game (`_process` or `_physics_process`). It handles dynamic chunk loading/unloading based on the player's distance to chunks.
-
-### Orchestration & Development Workflow
-1. Move the `godot_importer` contents into `res://addons/terrain_importer/` inside your Godot project.
-2. Ensure you have `plugin.cfg` and your `EditorPlugin` script initialized.
-3. Go to **Project > Project Settings > Plugins** in Godot and enable the "Terrain Importer" plugin.
-4. Use the newly added standard toolbar button or Tools menu item to execute the batch import script.
-5. Add the `TerrainManager` node to your active scene tree and pass it a reference to your Player to begin runtime chunk streaming.
+1. **Export from Blender**: Use the Blender add-on to export your chunks. You will get a folder containing `.obj` files and a `terrain_metadata.json` file.
+2. **Select Folder**: In the Godot Terrain Importer dock on the right, click **Browse** and select that exported folder.
+3. **Verify Metadata**: The dock should say "Valid Metadata Found" and display the Chunk Size and Total Chunks.
+4. **Create World**: Click **Create World From Tiles**, give your world a name (e.g., "Overworld"), and hit Create.
+5. **Wait for Generation**: The plugin will freeze for a moment as it processes every chunk, adds collision, and saves them as `.tscn` files in `res://terrain_worlds/`.
+6. **Open Your World**: When it prints "Complete!", open `res://terrain_worlds/Overworld/Overworld.tscn`. 
+7. **Configure the Streamer**: Click the `TerrainManager` node in your scene. In the inspector, assign your Player or Camera node to the **Target Player** slot. Adjust the **Load Distance Tiles** to control how far out chunks spawn (e.g., 2 tiles). Disable or enable `Preview in Editor` as desired.
