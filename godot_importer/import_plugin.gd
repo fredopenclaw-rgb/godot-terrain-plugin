@@ -171,8 +171,27 @@ func _create_master_world_scene(world_name: String, world_dir: String, chunks_di
 	var scene_path = world_dir + world_name + ".tscn"
 	
 	# CONTINUOUS UPDATE LOGIC: Never overwrite the Master Scene if the user already built one
+	# BUT we MUST update the Terrain Manager node with the newest scaled metadata properties!
 	if FileAccess.file_exists(scene_path):
-		print("Master scene already exists. Skipping overwrite to preserve Player setup.")
+		var existing_scene = load(scene_path)
+		if existing_scene and existing_scene is PackedScene:
+			var root = existing_scene.instantiate()
+			var manager = root.get_node_or_null("TerrainManager")
+			if manager:
+				manager.chunk_size = chunk_size
+				manager.total_chunks = metadata.get("total_chunks", 0)
+				manager.chunk_metadata_json = JSON.stringify(metadata)
+				
+				for child in root.get_children():
+					if not child.owner:
+						child.owner = root
+					_recursive_own(child, root)
+					
+				var packed = PackedScene.new()
+				packed.pack(root)
+				ResourceSaver.save(packed, scene_path)
+				
+		print("Master scene already exists. Updated TerrainManager metadata and preserved Player setup.")
 		EditorInterface.open_scene_from_path(scene_path)
 		return
 		

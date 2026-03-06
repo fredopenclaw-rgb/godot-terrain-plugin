@@ -55,6 +55,10 @@ func _parse_metadata():
 			var bbox_min = json["bbox"]["min"]
 			_bbox_min_x = float(bbox_min[0])
 			_bbox_min_y = float(bbox_min[1])
+		if json.has("chunk_size"):
+			chunk_size = float(json["chunk_size"])
+		if json.has("total_chunks"):
+			total_chunks = int(json["total_chunks"])
 
 func _physics_process(_delta):
 	if Engine.is_editor_hint():

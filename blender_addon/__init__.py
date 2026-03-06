@@ -44,6 +44,13 @@ class TerrainExportProperties(bpy.types.PropertyGroup):
         description="Size of each terrain chunk in meters"
     )
     
+    export_scale: bpy.props.FloatProperty(
+        name="Export Scale",
+        default=1.0,
+        min=0.001,
+        description="Explicit Godot scale multiplier (stacks with Blender Scene Unit Scale)"
+    )
+    
     export_format: bpy.props.EnumProperty(
         name="export_format",
         items=[('MESH', "Godot Mesh", "Export as Godot .mesh format"),
@@ -104,6 +111,11 @@ class OBJECT_OT_GenerateTerrainChunks(bpy.types.Operator):
         chunks_x = max(1, ceil(size_x / chunk_size))
         chunks_y = max(1, ceil(size_y / chunk_size))
         
+        # Get base bmesh BEFORE mutating collections to avoid StructRNA invalidation!
+        base_bm = bmesh.new()
+        base_bm.from_mesh(obj.data)
+        base_bm.transform(obj.matrix_world)
+        
         # Setup collection
         collection_name = "TerrainChunks"
         if collection_name in bpy.data.collections:
@@ -113,11 +125,6 @@ class OBJECT_OT_GenerateTerrainChunks(bpy.types.Operator):
         else:
             chunks_coll = bpy.data.collections.new(collection_name)
             context.scene.collection.children.link(chunks_coll)
-            
-        # Get base bmesh
-        base_bm = bmesh.new()
-        base_bm.from_mesh(obj.data)
-        base_bm.transform(obj.matrix_world)
         
         chunks_generated = 0
         
@@ -199,6 +206,10 @@ class OBJECT_OT_ExportTerrain(bpy.types.Operator):
         props = context.scene.terrain_export_props
         export_format = props.export_format
         
+        # Get scene scale multiplier (e.g., 1000.0 for Kilometers, 1.0 for Meters)
+        # And multiply by any manual UI export scale they assign
+        global_scale = context.scene.unit_settings.scale_length * props.export_scale
+        
         blend_path = bpy.data.filepath
         if blend_path:
             base_path = bpy.path.abspath(props.export_path)
@@ -230,9 +241,9 @@ class OBJECT_OT_ExportTerrain(bpy.types.Operator):
             filepath = os.path.join(base_path, chunk_filename + (".obj" if export_format == 'OBJ' else ".mesh"))
             
             if export_format == 'MESH':
-                self._export_obj(filepath.replace(".mesh", ".obj"))
+                self._export_obj(filepath.replace(".mesh", ".obj"), global_scale)
             else:
-                self._export_obj(filepath)
+                self._export_obj(filepath, global_scale)
                 
             obj.select_set(False)
             
@@ -243,13 +254,16 @@ class OBJECT_OT_ExportTerrain(bpy.types.Operator):
             })
             
         metadata_file = os.path.join(base_path, "terrain_metadata.json")
+        raw_min = chunks_coll.get("bbox_min", [0,0,0])
+        raw_max = chunks_coll.get("bbox_max", [0,0,0])
+        
         metadata = {
-            'chunk_size': chunks_coll.get("chunk_size", props.chunk_size),
+            'chunk_size': chunks_coll.get("chunk_size", props.chunk_size) * global_scale,
             'chunks': exported_chunks,
             'total_chunks': len(exported_chunks),
             'bbox': {
-                'min': list(chunks_coll.get("bbox_min", [0,0,0])),
-                'max': list(chunks_coll.get("bbox_max", [0,0,0]))
+                'min': [val * global_scale for val in raw_min],
+                'max': [val * global_scale for val in raw_max]
             }
         }
         
@@ -259,14 +273,15 @@ class OBJECT_OT_ExportTerrain(bpy.types.Operator):
         self.report({'INFO'}, f"Exported {len(exported_chunks)} terrain chunks to {base_path}")
         return {'FINISHED'}
 
-    def _export_obj(self, filepath):
+    def _export_obj(self, filepath, global_scale=1.0):
         """Export selected to .obj format"""
         bpy.ops.wm.obj_export(
             filepath=filepath,
             export_selected_objects=True,
             export_normals=True,
             export_uv=True,
-            export_materials=False
+            export_materials=False,
+            global_scale=global_scale
         )
 
 
@@ -284,6 +299,7 @@ class VIEW3D_PT_TerrainPanel(bpy.types.Panel):
         props = scene.terrain_export_props
 
         layout.prop(props, "chunk_size")
+        layout.prop(props, "export_scale")
         layout.prop(props, "export_format")
         layout.prop(props, "export_path")
         layout.prop(props, "compute_normals")
